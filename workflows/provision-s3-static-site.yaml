@@ -1,0 +1,51 @@
+# Nome do fluxo de trabalho
+name: Create S3 Static Site
+
+# Evento que aciona o fluxo de trabalho: abertura de uma issue
+on:
+  issues:
+    type:
+      - opened
+
+jobs:
+  deploy:
+    # Ambiente onde o trabalho será executado
+    runs-on: ubuntu-latest
+
+    steps:
+      # Passo para fazer o checkout do repositório
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      # Passo para configurar a CLI da AWS
+      - name: Set up AWS CLI  
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 # substitua pela sua região
+      
+      # Passo para extrair o nome do bucket a partir do título da issue
+      - name: Extract Bucket Name from Issue
+        run: 
+          export BUCKET_NAME=$(echo ${{ github.event.issue.title }})
+          echo "Bucket Name: $BUCKET_NAME"
+          echo "BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
+      
+      # Passo para executar o Terraform e criar o bucket S3
+      - name: Run Terraform
+        run: |
+          cd terraform
+          cd s3-bucket-static
+          terraform init
+          terraform apply -auto-approve -var="bucket_name=${{env.BUCKET_NAME}}"
+      
+      # Passo para adicionar um comentário na issue informando que o bucket foi criado
+      - name: Add comment
+        run: gh issue comment "$NUMBER" --repo "$REPO" --body "$BODY"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          BODY: > 
+            O bucket S3 foi criado com sucesso!
